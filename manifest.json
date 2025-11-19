@@ -1,0 +1,11 @@
+{
+  "domain": "bsk_zephyr",
+  "name": "BSK Zephyr Ventilation",
+  "version": "0.0.1",
+  "documentation": "https://example.com", 
+  "requirements": [],
+  "codeowners": ["@your-github"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "loggers": ["custom_components.bsk_zephyr"]
+}
