@@ -15,10 +15,12 @@ DEVICE_MAX = 80
 
 
 def pct_to_speed(pct: int) -> int:
+    """Map 0–100% to device speed range 22–80."""
     return round(DEVICE_MIN + (DEVICE_MAX - DEVICE_MIN) * (pct / 100))
 
 
 def speed_to_pct(speed: int) -> int:
+    """Map device speed 22–80 to 0–100%."""
     if speed <= DEVICE_MIN:
         return 0
     if speed >= DEVICE_MAX:
@@ -29,13 +31,13 @@ def speed_to_pct(speed: int) -> int:
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    add: AddEntitiesCallback,
+    add_entities: AddEntitiesCallback,
 ) -> None:
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     client = data["client"]
 
-    add([BskZephyrFan(coordinator, client)])
+    add_entities([BskZephyrFan(coordinator, client)])
 
 
 class BskZephyrFan(BskZephyrEntity, FanEntity):
@@ -44,7 +46,7 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
     _attr_has_entity_name = True
     _attr_name = "Fan"
 
-    # Support ON/OFF, speed, and preset modes (Cycle / Intake / Exhaust)
+    # Support on/off, speed and preset modes (Cycle / Intake / Exhaust)
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED
         | FanEntityFeature.TURN_ON
@@ -52,7 +54,6 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
         | FanEntityFeature.PRESET_MODE
     )
 
-    # These are our "modes"
     _preset_modes = ["Cycle", "Intake", "Exhaust"]
 
     def __init__(self, coordinator, client):
@@ -78,7 +79,7 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
         except (TypeError, ValueError):
             return None
 
-    # --------- PRESET MODES (MODE INTEGRATED HERE) ---------
+    # --------- PRESET MODES (mode integrated) ---------
 
     @property
     def preset_modes(self) -> list[str]:
@@ -105,6 +106,22 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
 
         await self.coordinator.async_request_refresh()
 
+    # --------- ICON (symbols for modes) ---------
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on current mode."""
+        mode = self.preset_mode
+
+        if mode == "Intake":
+            return "mdi:arrow-collapse-left"
+        if mode == "Exhaust":
+            return "mdi:arrow-collapse-right"
+        if mode == "Cycle":
+            return "mdi:autorenew"
+
+        return "mdi:fan"
+
     # ---------------------------
     #   CONTROL HANDLERS
     # ---------------------------
@@ -116,6 +133,7 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
         # Always ensure device power is ON
         await self._client.power_on()
 
+        # Set the speed if provided
         if percentage is not None:
             await self._client.set_fan_speed(pct_to_speed(percentage))
 
@@ -128,6 +146,7 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set fan speed. Auto power on if needed."""
+        # If currently off, turn on before changing speed
         if not self.is_on:
             await self._client.power_on()
 
