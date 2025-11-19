@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from homeassistant.components.fan import (
     FanEntity,
     FanEntityFeature,
@@ -7,64 +5,64 @@ from homeassistant.components.fan import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, DATA_COORDINATOR
+from .const import DOMAIN
+from .entity import BskZephyrEntity
+
+
+DEVICE_MIN = 22
+DEVICE_MAX = 80
+
+
+def pct_to_speed(pct: int) -> int:
+    return round(DEVICE_MIN + (DEVICE_MAX - DEVICE_MIN) * (pct / 100))
+
+
+def speed_to_pct(speed: int) -> int:
+    if speed <= DEVICE_MIN:
+        return 0
+    if speed >= DEVICE_MAX:
+        return 100
+    return round((speed - DEVICE_MIN) * 100 / (DEVICE_MAX - DEVICE_MIN))
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    add: AddEntitiesCallback,
 ) -> None:
     data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data[DATA_COORDINATOR]
+    coordinator = data["coordinator"]
     client = data["client"]
 
-    async_add_entities([BskZephyrFan(coordinator, client, entry.entry_id)], True)
+    add([BskZephyrFan(coordinator, client)])
 
 
-def _map_percentage_to_device(percentage: int) -> int:
-    device_min = 22
-    device_max = 80
-    return round(device_min + (device_max - device_min) * (percentage / 100))
+class BskZephyrFan(BskZephyrEntity, FanEntity):
+    """Full fan control for BSK Zephyr."""
 
-
-def _map_device_to_percentage(speed: int) -> int:
-    device_min = 22
-    device_max = 80
-    if speed <= device_min:
-        return 0
-    if speed >= device_max:
-        return 100
-    return round((speed - device_min) * 100 / (device_max - device_min))
-
-
-class BskZephyrFan(CoordinatorEntity, FanEntity):
     _attr_has_entity_name = True
     _attr_name = "Fan"
-    _attr_icon = "mdi:fan"
-    _attr_supported_features = FanEntityFeature.SET_SPEED
 
-    def __init__(self, coordinator, client, unique_base: str) -> None:
-        super().__init__(coordinator)
+    # ❗ IMPORTANT: Advertise ON/OFF support
+    _attr_supported_features = (
+        FanEntityFeature.SET_SPEED
+        | FanEntityFeature.TURN_ON
+        | FanEntityFeature.TURN_OFF
+    )
+
+    def __init__(self, coordinator, client):
+        super().__init__(coordinator, "fan")
         self._client = client
-        self._attr_unique_id = f"{unique_base}_fan"
+
+    # ---------------------------
+    #   STATE (from coordinator)
+    # ---------------------------
 
     @property
-    def is_on(self) -> bool | None:
-        # Prefer power state from coordinator
+    def is_on(self) -> bool:
         power = str(self.coordinator.data.get("power", "")).upper()
-        if power in ("ON", "OFF"):
-            return power == "ON"
-
-        # Fallback: infer from fan speed
-        speed = self.coordinator.data.get("fan_speed")
-        try:
-            speed = int(speed)
-        except (TypeError, ValueError):
-            return None
-        return speed > 22
+        return power == "ON"
 
     @property
     def percentage(self) -> int | None:
@@ -72,26 +70,39 @@ class BskZephyrFan(CoordinatorEntity, FanEntity):
         if speed is None:
             return None
         try:
-            speed = int(speed)
+            return speed_to_pct(int(speed))
         except (TypeError, ValueError):
             return None
-        return _map_device_to_percentage(speed)
+
+    # ---------------------------
+    #   CONTROL HANDLERS
+    # ---------------------------
 
     async def async_turn_on(self, **kwargs) -> None:
+        """Turn fan on. If % provided, set the speed too."""
+
         percentage = kwargs.get("percentage")
+
+        # Always turn the unit ON first
+        await self._client.power_on()
+
+        # Set the speed if provided
         if percentage is not None:
-            device_speed = _map_percentage_to_device(percentage)
-            await self._client.set_fan_speed(device_speed)
-        else:
-            await self._client.power_on()
+            await self._client.set_fan_speed(pct_to_speed(percentage))
 
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
+        """Turn fan OFF (turn device off)."""
         await self._client.power_off()
         await self.coordinator.async_request_refresh()
 
     async def async_set_percentage(self, percentage: int) -> None:
-        device_speed = _map_percentage_to_device(percentage)
-        await self._client.set_fan_speed(device_speed)
+        """Change fan speed. Automatically power on if off."""
+
+        # Turn device on before changing speed
+        if not self.is_on:
+            await self._client.power_on()
+
+        await self._client.set_fan_speed(pct_to_speed(percentage))
         await self.coordinator.async_request_refresh()

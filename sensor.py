@@ -1,154 +1,143 @@
-from __future__ import annotations
-
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     SensorEntity,
+    SensorDeviceClass,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, DATA_COORDINATOR
+from .const import DOMAIN
+from .entity import BskZephyrEntity
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback):
     data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data[DATA_COORDINATOR]
+    coordinator = data["coordinator"]
 
-    entities: list[SensorEntity] = [
-        BskZephyrTemperatureSensor(coordinator, entry.entry_id),
-        BskZephyrHumiditySensor(coordinator, entry.entry_id),
-        BskZephyrRssiSensor(coordinator, entry.entry_id),
-        BskZephyrModeSensor(coordinator, entry.entry_id),
-        BskZephyrSetHumiditySensor(coordinator, entry.entry_id),
-        BskZephyrHumidityBoostSensor(coordinator, entry.entry_id),
-        BskZephyrFilterTimerSensor(coordinator, entry.entry_id),
-        BskZephyrHygieneStatusSensor(coordinator, entry.entry_id),
-        BskZephyrBuzzerStateSensor(coordinator, entry.entry_id),
-    ]
-    async_add_entities(entities, True)
-
-
-class BskZephyrBaseSensor(CoordinatorEntity, SensorEntity):
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator, unique_base: str, name_suffix: str) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{unique_base}_{name_suffix}"
+    add([
+        Temp(coordinator),
+        Humid(coordinator),
+        RSSI(coordinator),
+        Mode(coordinator),
+        SetHumidity(coordinator),
+        HumidityBoost(coordinator),
+        FilterTimer(coordinator),
+        HygieneStatus(coordinator),
+        BuzzerState(coordinator),
+    ])
 
 
-class BskZephyrTemperatureSensor(BskZephyrBaseSensor):
+class BaseSensor(BskZephyrEntity, SensorEntity):
+    """Base sensor inheriting device + coordinator logic."""
+
+    def __init__(self, coordinator, uid):
+        super().__init__(coordinator, uid)
+
+
+class Temp(BaseSensor):
     _attr_name = "Temperature"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "°C"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "temperature")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "temperature")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("temperature")
 
 
-class BskZephyrHumiditySensor(BskZephyrBaseSensor):
+class Humid(BaseSensor):
     _attr_name = "Humidity"
     _attr_device_class = SensorDeviceClass.HUMIDITY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "%"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "humidity")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "humidity")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("humidity")
 
 
-class BskZephyrRssiSensor(BskZephyrBaseSensor):
+class RSSI(BaseSensor):
     _attr_name = "WiFi RSSI"
     _attr_native_unit_of_measurement = "dBm"
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "rssi")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "rssi")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("rssi")
 
 
-class BskZephyrModeSensor(BskZephyrBaseSensor):
+class Mode(BaseSensor):
     _attr_name = "Operation Mode"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "operation_mode")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "operation_mode")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("operation_mode")
 
 
-class BskZephyrSetHumiditySensor(BskZephyrBaseSensor):
+class SetHumidity(BaseSensor):
     _attr_name = "Set Humidity"
     _attr_native_unit_of_measurement = "%"
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "set_humidity")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "set_humidity")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("set_humidity")
 
 
-class BskZephyrHumidityBoostSensor(BskZephyrBaseSensor):
+class HumidityBoost(BaseSensor):
     _attr_name = "Humidity Boost"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "humidity_boost")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "humidity_boost")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("humidity_boost")
 
 
-class BskZephyrFilterTimerSensor(BskZephyrBaseSensor):
+class FilterTimer(BaseSensor):
     _attr_name = "Filter Timer"
     _attr_native_unit_of_measurement = "h"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "filter_timer")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "filter_timer")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("filter_timer")
 
 
-class BskZephyrHygieneStatusSensor(BskZephyrBaseSensor):
+class HygieneStatus(BaseSensor):
     _attr_name = "Hygiene Status"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "hygiene_status")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "hygiene_status")
 
     @property
     def native_value(self):
         return self.coordinator.data.get("hygiene_status")
 
 
-class BskZephyrBuzzerStateSensor(BskZephyrBaseSensor):
+class BuzzerState(BaseSensor):
     _attr_name = "Buzzer State"
 
-    def __init__(self, coordinator, unique_base: str) -> None:
-        super().__init__(coordinator, unique_base, "buzzer_state")
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "buzzer_state")
 
     @property
     def native_value(self):
-        # 0/1 from parsed HTML; we keep it as-is
         return self.coordinator.data.get("buzzer")
