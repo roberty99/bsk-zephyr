@@ -39,20 +39,29 @@ async def async_setup_entry(
 
 
 class BskZephyrFan(BskZephyrEntity, FanEntity):
-    """Full fan control for BSK Zephyr."""
+    """Full fan control for BSK Zephyr (power + speed + mode)."""
 
     _attr_has_entity_name = True
     _attr_name = "Fan"
 
+    # Support ON/OFF, speed, and preset modes (Cycle / Intake / Exhaust)
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED
         | FanEntityFeature.TURN_ON
         | FanEntityFeature.TURN_OFF
+        | FanEntityFeature.PRESET_MODE
     )
+
+    # These are our "modes"
+    _preset_modes = ["Cycle", "Intake", "Exhaust"]
 
     def __init__(self, coordinator, client):
         super().__init__(coordinator, "fan")
         self._client = client
+
+    # ---------------------------
+    #   STATE (from coordinator)
+    # ---------------------------
 
     @property
     def is_on(self) -> bool:
@@ -69,10 +78,42 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
         except (TypeError, ValueError):
             return None
 
+    # --------- PRESET MODES (MODE INTEGRATED HERE) ---------
+
+    @property
+    def preset_modes(self) -> list[str]:
+        """Available fan modes."""
+        return self._preset_modes
+
+    @property
+    def preset_mode(self) -> str | None:
+        """Current mode based on operation_mode from status page."""
+        mode = str(self.coordinator.data.get("operation_mode", "")).capitalize()
+        return mode if mode in self._preset_modes else None
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set the fan mode: Cycle / Intake / Exhaust."""
+        if preset_mode not in self._preset_modes:
+            raise ValueError(f"Unsupported preset mode: {preset_mode}")
+
+        if preset_mode == "Cycle":
+            await self._client.set_mode_cycle()
+        elif preset_mode == "Intake":
+            await self._client.set_mode_intake()
+        elif preset_mode == "Exhaust":
+            await self._client.set_mode_exhaust()
+
+        await self.coordinator.async_request_refresh()
+
+    # ---------------------------
+    #   CONTROL HANDLERS
+    # ---------------------------
+
     async def async_turn_on(self, *args, **kwargs) -> None:
         """Turn fan ON. Then optionally set speed."""
         percentage = kwargs.get("percentage")
 
+        # Always ensure device power is ON
         await self._client.power_on()
 
         if percentage is not None:
@@ -81,12 +122,12 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, *args, **kwargs) -> None:
-        """Turn fan OFF."""
+        """Turn fan OFF (device off)."""
         await self._client.power_off()
         await self.coordinator.async_request_refresh()
 
     async def async_set_percentage(self, percentage: int) -> None:
-        """Set fan speed. Auto power on."""
+        """Set fan speed. Auto power on if needed."""
         if not self.is_on:
             await self._client.power_on()
 
