@@ -44,7 +44,6 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
     _attr_has_entity_name = True
     _attr_name = "Fan"
 
-    # ❗ IMPORTANT: Advertise ON/OFF support
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED
         | FanEntityFeature.TURN_ON
@@ -54,10 +53,6 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
     def __init__(self, coordinator, client):
         super().__init__(coordinator, "fan")
         self._client = client
-
-    # ---------------------------
-    #   STATE (from coordinator)
-    # ---------------------------
 
     @property
     def is_on(self) -> bool:
@@ -74,33 +69,24 @@ class BskZephyrFan(BskZephyrEntity, FanEntity):
         except (TypeError, ValueError):
             return None
 
-    # ---------------------------
-    #   CONTROL HANDLERS
-    # ---------------------------
-
-    async def async_turn_on(self, **kwargs) -> None:
-        """Turn fan on. If % provided, set the speed too."""
-
+    async def async_turn_on(self, *args, **kwargs) -> None:
+        """Turn fan ON. Then optionally set speed."""
         percentage = kwargs.get("percentage")
 
-        # Always turn the unit ON first
         await self._client.power_on()
 
-        # Set the speed if provided
         if percentage is not None:
             await self._client.set_fan_speed(pct_to_speed(percentage))
 
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs) -> None:
-        """Turn fan OFF (turn device off)."""
+    async def async_turn_off(self, *args, **kwargs) -> None:
+        """Turn fan OFF."""
         await self._client.power_off()
         await self.coordinator.async_request_refresh()
 
     async def async_set_percentage(self, percentage: int) -> None:
-        """Change fan speed. Automatically power on if off."""
-
-        # Turn device on before changing speed
+        """Set fan speed. Auto power on."""
         if not self.is_on:
             await self._client.power_on()
 
