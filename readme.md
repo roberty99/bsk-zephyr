@@ -4,7 +4,9 @@ A fully local Home Assistant integration for the BSK Zephyr inline ventilation f
 Controls power, speed, mode, humidity target, buzzer, and exposes all onboard sensors.
 
 No cloud. No dependencies. Fast local polling.
-BSK Zephy have enabled a Home Assistant friednly local Web UI via that Advnaced Configuraition option in the BSK Connect app. 
+BSK Zephy have enabled a Home Assistant friendly local Web UI via that Advnaced Configuration option in the BSK Connect app. 
+Once your device is configured using this Advanced Configuration option a local web UI is enabled. 
+The below integartion will allow you to read sensors and interact with the device via Home Assistant. 
 
 ⸻
 
