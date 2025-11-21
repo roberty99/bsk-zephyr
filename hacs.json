@@ -1,8 +1,9 @@
 {
-  "name": "EPH Ember (Patched)",
-  "domain": "ephember",
-  "country": "global",
+  "name": "BSK Zephyr",
+  "content_in_root": false,
+  "domains": ["bsk_zephyr"],
+  "render_readme": true,
+  "country": [],
   "homeassistant": "2024.1.0",
-  "hide_default_branch": false,
-  "render_readme": true
+  "iot_class": "local_polling"
 }
